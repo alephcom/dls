@@ -1,10 +1,24 @@
 #!/usr/bin/perl
+#
+# Calculate Dominion Land Survey locations.  
+# This data is NOT EXACT.  It's intended to be 'good enough' for many applications.
+# Arguments:
+# 0 = filename
+# 1 = Type of Output  osm / json / csv / sql
+
 use Math::Trig 'great_circle_destination';
 use Geo::Calc;
 use Data::Dumper;
 
-print "Content-Type:application/octet-stream; name=\"FileName.osm\"\r\n";
-print "Content-Disposition: attachment; filename=\"FileName.osm\"\r\n\n";
+my $filename = @ARGV[0];
+my $output_type = @ARGV[1];
+
+my $ouput = "";
+
+
+#print "Content-Type:application/octet-stream; name=\"FileName.osm\"\r\n";
+#print "Content-Disposition: attachment; filename=\"FileName.osm\"\r\n\n";
+
 use strict;
 my $cycle = 5;
 my $count = 0;
@@ -81,15 +95,10 @@ my @meridians = (
 	{ Name => "5th Meridian", Lon => -114 },
 	{ Name => "6th Meridian", Lon => -118 } );
 
-my $file_contents = "";
-
-my $file_header = "<?xml version='1.0' encoding='UTF-8'?>
-<osm version='0.6' upload='true' generator='JOSM'>";
-my $file_footer = "</osm>";
-
+my $osm_file_contents = "";
 
 foreach (@meridians) {
-	$file_contents .= "<node id='-" . ($node) ."' action='modify' visible='true' lat='" . $first_baseline .  "' lon='" . $_->{Lon} .  "' />" . "\n"
+	$osm_file_contents .= "<node id='-" . ($node) ."' action='modify' visible='true' lat='" . $first_baseline .  "' lon='" . $_->{Lon} .  "' />" . "\n"
 	. "<node id='-" . ($node + 1) . "' action='modify' visible='true' lat='" . $last_baseline . "' lon='" . $_->{Lon} . "' />" . "\n"
 	. "  <way id='-" . $way . "' action='modify' visible='true'>" ."\n"
 	. "    <nd ref='-" . $node . "' />" . "\n"
@@ -106,7 +115,7 @@ my $count = 1;
 while ($current_lat <= $last_baseline) { 
 	my ($string1, $node1) = &get_node($current_lat,$meridians[0]->{Lon});
 	my ($string2, $node2) = &get_node($current_lat,$meridians[1]->{Lon});
-	$file_contents .= $string1 . $string2 . &get_way($count . " From " . $meridians[0]->{Name} . " To " . $meridians[1]->{Name},
+	$osm_file_contents .= $string1 . $string2 . &get_way($count . " From " . $meridians[0]->{Name} . " To " . $meridians[1]->{Name},
 		($node1, $node2,$node1));
 	$node = $node + 3;
 	$count++;
@@ -119,13 +128,13 @@ $count = 1;
 while ($current_lat <= $last_baseline) { 
 	my ($string1, $node1) = &get_node($current_lat,$meridians[1]->{Lon});
 	my ($string2, $node2) = &get_node($current_lat,$meridians[2]->{Lon});
-	$file_contents .= $string1 . $string2 . &get_way($count . " From " . $meridians[1]->{Name} . " To " . $meridians[2]->{Name},
+	$osm_file_contents .= $string1 . $string2 . &get_way($count . " From " . $meridians[1]->{Name} . " To " . $meridians[2]->{Name},
 		($node1, $node2,$node1));
 	$node = $node + 3;
 	my $current_lon = $meridians[1]->{Lon};
 	my $countinner = 1;
 	$count++;
-#	print STDERR "Current Lon: " . $current_lon . "Meridian 3: " . $meridians[2]->{Lon} . "\n";
+	print STDERR "Current Lon: " . $current_lon . " West of Meridian 2: " . $meridians[2]->{Lon} . "\n";
 	while ($current_lon >= $meridians[2]->{Lon}) {
 		my $gc = Geo::Calc->new( lat => $current_lat, lon => $current_lon );
 		my $result = $gc->destination_point( -90, 9778 );
@@ -134,19 +143,19 @@ while ($current_lat <= $last_baseline) {
 		if ($count == 2) {
 			my ($string1, $node1) = &get_node($current_lat,$current_lon);
 			my ($string2, $node2) = &get_node($current_lat + ($post_1881_ns / 2), $current_lon);
-			$file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
+			$osm_file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
 		}
 		elsif ($count % 4 != 0 && $count % 2 == 0) {
-#			print STDERR "correction line";
+			print STDERR "Correction Line\n";
 			my ($string1, $node1) = &get_node($current_lat + ($post_1881_ns / 2),$current_lon);
 			my ($string2, $node2) = &get_node($current_lat - ($post_1881_ns / 2), $current_lon);
-			$file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
+			$osm_file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
 		}
 		else {
 			last;
 		}
 		}
-		print STDERR "Current Lon: " . $current_lon . "Meridian 3: " . $meridians[2]->{Lon} . "\n";
+		print STDERR "Current Lon: " . $current_lon . " West of Meridian 2: " . $meridians[2]->{Lon} . "\n";
 		$countinner++;
 	}
 	$current_lat = $current_lat + $post_1881_ns / 4;
@@ -158,13 +167,13 @@ $count = 1;
 while ($current_lat <= $last_baseline) { 
 	my ($string1, $node1) = &get_node($current_lat,$meridians[2]->{Lon});
 	my ($string2, $node2) = &get_node($current_lat,$meridians[3]->{Lon});
-	$file_contents .= $string1 . $string2 . &get_way($count . " From " . $meridians[2]->{Name} . " To " . $meridians[3]->{Name},
+	$osm_file_contents .= $string1 . $string2 . &get_way($count . " From " . $meridians[2]->{Name} . " To " . $meridians[3]->{Name},
 		($node1, $node2,$node1));
 	$node = $node + 3;
 	my $current_lon = $meridians[2]->{Lon};
 	my $countinner = 1;
 	$count++;
-#	print STDERR "Current Lon: " . $current_lon . "Meridian 4: " . $meridians[3]->{Lon} . "\n";
+	print STDERR "Current Lon: " . $current_lon . " West of Meridian 3: " . $meridians[3]->{Lon} . "\n";
 	while ($current_lon >= $meridians[3]->{Lon}) {
 		my $gc = Geo::Calc->new( lat => $current_lat, lon => $current_lon );
 		my $result = $gc->destination_point( -90, 9778 );
@@ -173,19 +182,19 @@ while ($current_lat <= $last_baseline) {
 		if ($count == 2) {
 			my ($string1, $node1) = &get_node($current_lat,$current_lon);
 			my ($string2, $node2) = &get_node($current_lat + ($post_1881_ns / 2), $current_lon);
-			$file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
+			$osm_file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
 		}
 		elsif ($count % 4 != 0 && $count % 2 == 0) {
-#			print STDERR "correction line";
+			print STDERR "Correction Line\n";
 			my ($string1, $node1) = &get_node($current_lat + ($post_1881_ns / 2),$current_lon);
 			my ($string2, $node2) = &get_node($current_lat - ($post_1881_ns / 2), $current_lon);
-			$file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
+			$osm_file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
 		}
 		else {
 			last;
 		}
 		}
-		print STDERR "Current Lon: " . $current_lon . "Meridian 4: " . $meridians[3]->{Lon} . "\n";
+		print STDERR "Current Lon: " . $current_lon . " West of Meridian 3: " . $meridians[3]->{Lon} . "\n";
 		$countinner++;
 	}
 	$current_lat = $current_lat + $post_1881_ns / 4;
@@ -197,12 +206,12 @@ $count = 1;
 while ($current_lat <= $last_baseline) { 
 	my ($string1, $node1) = &get_node($current_lat,$meridians[3]->{Lon});
 	my ($string2, $node2) = &get_node($current_lat,$meridians[4]->{Lon});
-	$file_contents .= $string1 . $string2 . &get_way($count . " From " . $meridians[3]->{Name} . " To " . $meridians[4]->{Name},
+	$osm_file_contents .= $string1 . $string2 . &get_way($count . " From " . $meridians[3]->{Name} . " To " . $meridians[4]->{Name},
 		($node1, $node2,$node1));
 	my $current_lon = $meridians[3]->{Lon};
 	my $countinner = 1;
 	$count++;
-#	print STDERR "Current Lon: " . $current_lon . "Meridian 5: " . $meridians[4]->{Lon} . "\n";
+	print STDERR "Current Lon: " . $current_lon . " West of Meridian 4: " . $meridians[4]->{Lon} . "\n";
 	my $range = 1;
 	while ($current_lon >= $meridians[4]->{Lon}) {
 		my $gc = Geo::Calc->new( lat => $current_lat, lon => $current_lon );
@@ -211,7 +220,7 @@ while ($current_lat <= $last_baseline) {
 				# This only matches the first row at the South side.
 				#my ($string1, $node1) = &get_node($current_lat,$current_lon);
 				#my ($string2, $node2) = &get_node($current_lat + ($post_1881_ns / 2), $current_lon);
-				#$file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
+				#$osm_file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
 				&get_township_grid("Range: " . $range . "Baseline: " . $count . " W4", $current_lat,$current_lon,$offset1);
 				&get_township_grid("Range: " . $range+1 . "Baseline: " . $count . " W4", $current_lat + ($post_1881_ns / 4), $current_lon,$offset1);
 			}
@@ -219,7 +228,7 @@ while ($current_lat <= $last_baseline) {
 				# This matches the ranges that the townships are squared against.
 				#my ($string1, $node1) = &get_node($current_lat + ($post_1881_ns / 2),$current_lon);
 				#my ($string2, $node2) = &get_node($current_lat - ($post_1881_ns / 2), $current_lon);
-				#$file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
+				#$osm_file_contents .= $string1 . $string2 . &get_way("TEST",($node1,$node2));
 				&get_township_grid($count . "-" . $range . " W4" . $current_lat,$current_lat, $current_lon,$offset1);
 				&get_township_grid($count . "-" . $range . " W4", $current_lat + ($post_1881_ns / 4 * 1), $current_lon,$offset1);
 				&get_township_grid($count . "-" . $range . " W4", $current_lat - ($post_1881_ns / 2), $current_lon,$offset1);
@@ -244,16 +253,33 @@ $count = 1;
 while ($current_lat <= $last_baseline) { 
 	my ($string1, $node1) = &get_node($current_lat,$meridians[4]->{Lon});
 	my ($string2, $node2) = &get_node($current_lat,$meridians[5]->{Lon});
-	$file_contents .= $string1 . $string2 . &get_way($count . " From " . $meridians[4]->{Name} . " To " . $meridians[5]->{Name},
+	$osm_file_contents .= $string1 . $string2 . &get_way($count . " From " . $meridians[4]->{Name} . " To " . $meridians[5]->{Name},
 		($node1, $node2,$node1));
 	$node = $node + 3;
 	$count++;
 	$current_lat = $current_lat + $post_1881_ns / 4;
 }
 
-print $file_header . "\n";
-print $file_contents . "\n";
-print $file_footer . "\n";
+if ($output_type == "osm") {
+	#print $file_header . "\n";
+	print $osm_file_contents . "\n";
+	#print $file_footer . "\n";
+	my $string = "<?xml version='1.0' encoding='UTF-8'?>
+<osm version='0.6' upload='true' generator='JOSM'>\n";
+	$string .= $osm_file_contents;
+	$string .= "</osm>\n";
+
+
+	open(my $fh, '>', $filename) or die "Could not open file '$filename' $!";
+	print $fh $string;
+	close $fh;
+	print STDERR "Successfully wrote output to '$filename'.";
+}
+
+
+###################################################################################################
+# End of file and beginning of subroutines.
+###################################################################################################
 
 
 sub get_node() {
@@ -318,7 +344,7 @@ sub get_township_grid() {
 		my ($string3, $node3) = &get_node($nw_lat, $nw_lon); 
 		my ($string4, $node4) = &get_node($nw_lat, $se_lon); 
 		my $way_string = &get_way("Township: " . $_->{Name} . " " . $desc, ($node1, $node2, $node3, $node4, $node1));
-		$file_contents .= $string1 . $string2 . $string3 . $string4 . $way_string;
+		$osm_file_contents .= $string1 . $string2 . $string3 . $string4 . $way_string;
 #		print STDERR $way_string;
 	}
 }
